@@ -85,14 +85,14 @@ def create_database():
     conn = sqlite3.connect(DB_FILE)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS questions (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,  -- Auto-assigned unique ID
+            question_id   INTEGER PRIMARY KEY AUTOINCREMENT,  -- Auto-assigned unique ID
             student_name  TEXT NOT NULL,                      -- Who asked
             subject       TEXT NOT NULL,                      -- Which subject
-            question      TEXT NOT NULL,                      -- The question text
+            question_text TEXT NOT NULL,                      -- The question text
             status        TEXT DEFAULT 'Pending',             -- Current state
             ai_answer     TEXT DEFAULT '',                    -- AI-generated answer
             instructor_answer TEXT DEFAULT '',                -- Human-verified answer
-            confidence    REAL DEFAULT 0.0,                   -- AI confidence 0.0-1.0
+            ai_confidence REAL DEFAULT 0.0,                   -- AI confidence 0.0-1.0
             keywords      TEXT DEFAULT '',                    -- Extracted keywords
             topic         TEXT DEFAULT '',                    -- Detected sub-topic
             timestamp     TEXT DEFAULT (datetime('now','localtime'))  -- When posted
@@ -111,7 +111,7 @@ def save_question(name, subject, question):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO questions (student_name, subject, question) VALUES (?, ?, ?)",
+        "INSERT INTO questions (student_name, subject, question_text) VALUES (?, ?, ?)",
         (name, subject, question)
     )
     question_id = cursor.lastrowid   # The auto-assigned ID
@@ -129,8 +129,8 @@ def save_ai_answer(question_id, answer, confidence, keywords, topic):
     conn.execute(
         """UPDATE questions
            SET ai_answer=?, status='AI Answer Generated',
-               confidence=?, keywords=?, topic=?
-           WHERE id=?""",
+               ai_confidence=?, keywords=?, topic=?
+           WHERE question_id=?""",
         (answer, confidence, keywords, topic, question_id)
     )
     conn.commit()
@@ -145,7 +145,7 @@ def save_instructor_answer(question_id, answer):
     """
     conn = sqlite3.connect(DB_FILE)
     conn.execute(
-        "UPDATE questions SET instructor_answer=?, status='Instructor Verified' WHERE id=?",
+        "UPDATE questions SET instructor_answer=?, status='Instructor Verified' WHERE question_id=?",
         (answer, question_id)
     )
     conn.commit()
@@ -162,7 +162,7 @@ def get_all_questions():
     """
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
-    rows = conn.execute("SELECT * FROM questions ORDER BY id DESC").fetchall()
+    rows = conn.execute("SELECT * FROM questions ORDER BY question_id DESC").fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
@@ -171,7 +171,7 @@ def get_question_by_id(question_id):
     """Get a single question by its ID. Returns None if not found."""
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
-    row = conn.execute("SELECT * FROM questions WHERE id=?", (question_id,)).fetchone()
+    row = conn.execute("SELECT * FROM questions WHERE question_id=?", (question_id,)).fetchone()
     conn.close()
     return dict(row) if row else None
 
@@ -185,7 +185,7 @@ def get_pending_questions():
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT * FROM questions WHERE status != 'Instructor Verified' ORDER BY id"
+        "SELECT * FROM questions WHERE status != 'Instructor Verified' ORDER BY question_id"
     ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -786,9 +786,9 @@ def refresh_viewer():
     for q in questions:
         # iid is the Treeview row identifier; we use the DB id so on_select_question
         # can call get_question_by_id(int(sel[0])) directly
-        q_tree.insert("", tk.END, iid=str(q["id"]),
-                      values=(q["id"], q["student_name"], q["subject"],
-                              q["question"][:55], q["status"]))
+        q_tree.insert("", tk.END, iid=str(q["question_id"]),
+                      values=(q["question_id"], q["student_name"], q["subject"],
+                              q["question_text"][:55], q["status"]))
 
 
 def on_select_question(event):
@@ -808,7 +808,7 @@ def on_select_question(event):
 
     # Build the formatted display string line-by-line
     lines = [
-        f"  Question #{q['id']}",
+        f"  Question #{q['question_id']}",
         f"  {'=' * 50}",
         f"  Student  : {q['student_name']}",
         f"  Subject  : {q['subject']}",
@@ -820,12 +820,12 @@ def on_select_question(event):
     if q["topic"]:
         lines.append(f"  Topic    : {q['topic']}")
 
-    lines.append(f"\n  Question:\n  {q['question']}")
+    lines.append(f"\n  Question:\n  {q['question_text']}")
     lines.append(f"\n  {'─' * 50}")
 
     # Show AI answer if one exists
     if q["ai_answer"]:
-        conf = f" (Confidence: {q['confidence']:.0%})" if q["confidence"] else ""
+        conf = f" (Confidence: {q['ai_confidence']:.0%})" if q["ai_confidence"] else ""
         lines.append(f"  AI Answer{conf}:")
         lines.append(f"  {q['ai_answer']}")
     else:
@@ -956,9 +956,9 @@ def refresh_instructor():
     for row in inst_tree.get_children():
         inst_tree.delete(row)
     for q in get_pending_questions():
-        inst_tree.insert("", tk.END, iid=str(q["id"]),
-                         values=(q["id"], q["student_name"], q["subject"],
-                                 q["question"][:50], q["status"]))
+        inst_tree.insert("", tk.END, iid=str(q["question_id"]),
+                         values=(q["question_id"], q["student_name"], q["subject"],
+                                 q["question_text"][:50], q["status"]))
 
 
 def on_inst_select(event):
@@ -980,14 +980,14 @@ def on_inst_select(event):
         return
 
     lines = [
-        f"  Q#{q['id']}  [{q['subject']}]  by {q['student_name']}",
+        f"  Q#{q['question_id']}  [{q['subject']}]  by {q['student_name']}",
         f"  Status: {q['status']}  |  {q['timestamp']}",
         f"  {'─' * 50}",
-        f"  Question: {q['question']}",
+        f"  Question: {q['question_text']}",
         f"  {'─' * 50}",
     ]
     if q["ai_answer"]:
-        lines.append(f"  AI Answer (Confidence: {q['confidence']:.0%}):")
+        lines.append(f"  AI Answer (Confidence: {q['ai_confidence']:.0%}):")
         lines.append(f"  {q['ai_answer']}")
     else:
         lines.append("  AI Answer: (not generated)")

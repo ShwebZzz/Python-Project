@@ -162,17 +162,11 @@ def _search_duckduckgo(query: str) -> list[str]:
 
 
 def _fallback_search(query: str) -> list[str]:
-    """Build direct Wikipedia / GeeksforGeeks URLs when DDGS is unavailable.
-
-    Converts the query to a URL-friendly slug:
-      "What is Python" → "What_is_Python" for Wikipedia
-                       → "what-is-python" for GeeksForGeeks
-    """
-    slug = query.strip().replace(" ", "_")       # Wikipedia-style slug
+    """Build search URLs for Wikipedia / GeeksforGeeks when DDGS is unavailable."""
     encoded = requests.utils.quote(query)        # URL-safe encoding for search query
     return [
-        f"https://en.wikipedia.org/wiki/{slug}",
-        f"https://www.geeksforgeeks.org/{slug.lower().replace('_', '-')}/",
+        f"https://en.wikipedia.org/w/index.php?search={encoded}",
+        f"https://www.geeksforgeeks.org/?s={encoded}",
         f"https://www.britannica.com/search?query={encoded}",
     ]
 
